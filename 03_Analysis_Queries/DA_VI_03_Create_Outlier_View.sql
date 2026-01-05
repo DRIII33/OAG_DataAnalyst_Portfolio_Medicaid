@@ -10,9 +10,8 @@ VIEW NAME: v_provider_fraud_outliers
 DESCRIPTION: This view identifies NPIs with billing anomalies using Z-Score logic. 
              It serves as the primary data source for the Looker Studio Dashboard.
 */
-
+--------------
 CREATE OR REPLACE VIEW `driiiportfolio.medicaid_analytics.v_provider_fraud_outliers` AS
-
 WITH PeerBenchmarks AS (
     SELECT 
         Procedure_Code,
@@ -22,7 +21,6 @@ WITH PeerBenchmarks AS (
     FROM `driiiportfolio.medicaid_analytics.claims_raw`
     GROUP BY Procedure_Code
 ),
-
 ProviderPerformance AS (
     SELECT 
         NPI,
@@ -35,24 +33,18 @@ ProviderPerformance AS (
         SUM(Amount_Paid) AS total_reimbursement
     FROM `driiiportfolio.medicaid_analytics.claims_raw`
     GROUP BY NPI, Procedure_Code, Program_Type, Provider_County
-),
-
-FinalAnalysis AS (
-    SELECT 
-        p.NPI,
-        p.Procedure_Code,
-        p.Program_Type,
-        p.Provider_County,
-        p.provider_claim_count,
-        ROUND(p.avg_units_per_claim, 2) AS avg_units,
-        ROUND(b.avg_units_statewide, 2) AS peer_avg,
-        -- Calculate Z-Score
-        ROUND((p.avg_units_per_claim - b.avg_units_statewide) / NULLIF(b.stddev_units_statewide, 0), 2) AS z_score,
-        p.total_reimbursement
-    FROM ProviderPerformance p
-    JOIN PeerBenchmarks b ON p.Procedure_Code = b.Procedure_Code
-    WHERE b.total_claims_in_code > 10 
 )
-
-SELECT * FROM FinalAnalysis 
-WHERE z_score > 2.5; -- Filtering for significant outliers for the dashboard
+SELECT 
+    p.NPI,
+    p.Procedure_Code,
+    p.Program_Type,
+    p.Provider_County,
+    p.provider_claim_count,
+    ROUND(p.avg_units_per_claim, 2) AS avg_units,
+    ROUND(b.avg_units_statewide, 2) AS peer_avg,
+    ROUND((p.avg_units_per_claim - b.avg_units_statewide) / NULLIF(b.stddev_units_statewide, 0), 2) AS z_score,
+    -- Format as Currency for Looker Studio
+    ROUND(CAST(p.total_reimbursement AS NUMERIC), 2) AS total_reimbursement
+FROM ProviderPerformance p
+JOIN PeerBenchmarks b ON p.Procedure_Code = b.Procedure_Code
+WHERE (p.avg_units_per_claim - b.avg_units_statewide) / NULLIF(b.stddev_units_statewide, 0) > 2.5;
