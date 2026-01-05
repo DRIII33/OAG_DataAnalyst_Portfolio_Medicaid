@@ -1,0 +1,16 @@
+/* Why a View? Performance. Calculating 5-year moving averages across 
+millions of HHSC claims in Looker Studio would cause significant lag.
+*/
+CREATE OR REPLACE VIEW `driiiportfolio.medicaid_analytics.v_historical_comparison` AS
+SELECT 
+    curr.NPI,
+    curr.total_reimbursement AS current_year_paid,
+    hist.avg_paid_5yr,
+    (curr.total_reimbursement / NULLIF(hist.avg_paid_5yr, 0)) - 1 AS percent_increase
+FROM `driiiportfolio.medicaid_analytics.v_provider_fraud_outliers` curr
+LEFT JOIN (
+    -- Simulated historical aggregation
+    SELECT NPI, AVG(Amount_Paid) as avg_paid_5yr 
+    FROM `driiiportfolio.medicaid_analytics.historical_claims` 
+    GROUP BY NPI
+) hist ON curr.NPI = hist.NPI;
